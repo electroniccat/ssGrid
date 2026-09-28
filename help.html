@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Drawing Grid — Help</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #1C1917; --surface: #262220; --surface-2: #322D2A; --surface-3: #3D3733;
+    --text: #EDE8E3; --text-dim: #A69C93; --text-faint: #726A62;
+    --accent: #6E93B8; --accent-text: #0F1720; --accent-soft: rgba(110, 147, 184, 0.16);
+    --border: #3D3733;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #F2EEE8; --surface: #FFFFFF; --surface-2: #E9E3D9; --surface-3: #DCD4C6;
+      --text: #221F1C; --text-dim: #6B6259; --text-faint: #9A9086;
+      --accent: #3E6690; --accent-text: #FBFAF7; --accent-soft: rgba(62, 102, 144, 0.12);
+      --border: #DCD4C6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1917; --surface: #262220; --surface-2: #322D2A; --surface-3: #3D3733;
+    --text: #EDE8E3; --text-dim: #A69C93; --text-faint: #726A62;
+    --accent: #6E93B8; --accent-text: #0F1720; --accent-soft: rgba(110, 147, 184, 0.16);
+    --border: #3D3733;
+  }
+  :root[data-theme="light"] {
+    --bg: #F2EEE8; --surface: #FFFFFF; --surface-2: #E9E3D9; --surface-3: #DCD4C6;
+    --text: #221F1C; --text-dim: #6B6259; --text-faint: #9A9086;
+    --accent: #3E6690; --accent-text: #FBFAF7; --accent-soft: rgba(62, 102, 144, 0.12);
+    --border: #DCD4C6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 32px 20px 80px; }
+  .back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text-dim); text-decoration: none; font-size: 14px; font-weight: 600;
+    margin-bottom: 24px;
+  }
+  .back:hover { color: var(--accent); }
+  h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
+  .lead { color: var(--text-dim); font-size: 15.5px; margin: 0 0 36px; max-width: 52ch; }
+  h2 {
+    font-size: 17px; margin: 40px 0 12px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+  p { font-size: 15px; margin: 0 0 12px; }
+  ol, ul { font-size: 15px; padding-left: 22px; margin: 0 0 12px; }
+  li { margin-bottom: 8px; }
+  li ul, li ol { margin-top: 8px; }
+  strong { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 0 0 16px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .callout {
+    background: var(--accent-soft); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; font-size: 14.5px; margin: 0 0 12px;
+  }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.9em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="./index.html">&larr; Back to Drawing Grid</a>
+  <h1>Drawing Grid — Quick Start Guide</h1>
+  <p class="lead">Drawing Grid overlays a customizable grid on any reference photo, with tools to simplify it to black-and-white and to rotate or zoom in — nothing to buy, nothing to install from a store.</p>
+
+  <h2>Getting Started</h2>
+  <ol>
+    <li>Click the link you were sent. It opens right in your web browser (Chrome or Edge) — there is nothing to download or install from an app store.</li>
+    <li>Optional, but nice to have: pin it so it opens like its own program instead of a browser tab.
+      <ul>
+        <li>Click the three dots in the top-right corner of the browser window.</li>
+        <li>Look for <strong>"Save and Share"</strong> or <strong>"More Tools"</strong>, then <strong>"Create shortcut..."</strong></li>
+        <li>Check the box that says <strong>"Open as window"</strong>, then click <strong>Create</strong>.</li>
+        <li>Now you'll have an icon on your Desktop or Start Menu that opens the tool by itself, without the rest of the browser around it.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h2>Loading a Photo</h2>
+  <ol>
+    <li>Click the blue <strong>Choose Photo</strong> button.</li>
+    <li>Pick any photo from your computer, the same way you'd attach a photo to an email.</li>
+    <li>The photo appears full-screen right away, with the default grid already on it.</li>
+  </ol>
+  <p>Your settings (grid size, colors, black &amp; white, rotation) are remembered automatically between visits — but the photo itself is not. You'll pick your photo again each time you open the tool.</p>
+
+  <h2>Black &amp; White and the Threshold Slider</h2>
+  <p>Tap the <strong>B&amp;W</strong> tab at the bottom to open these controls.</p>
+  <ul>
+    <li>The <strong>Black &amp; White</strong> switch turns the photo into pure black-and-white shapes — useful for seeing the big light and dark areas of your subject without color distracting you.</li>
+    <li>The <strong>Threshold</strong> slider controls how much of the photo becomes black versus white.
+      <ul>
+        <li>Slide it left: only the very darkest shadows turn black, everything else stays white.</li>
+        <li>Slide it right: more of the photo turns black, leaving only the brightest highlights white.</li>
+      </ul>
+    </li>
+  </ul>
+  <p>There's no "correct" setting — slide it back and forth and stop wherever the shapes read most clearly to you.</p>
+
+  <h2>Rotating the Photo</h2>
+  <p>Tap the <strong>Rotate</strong> tab at the bottom.</p>
+  <ul>
+    <li><strong>90° Left</strong> / <strong>90° Right</strong> — turns the photo a quarter-turn at a time. Good for photos taken sideways.</li>
+    <li><strong>Fine Adjust</strong> slider — small tilt adjustments, for straightening a photo that's just slightly crooked.</li>
+    <li><strong>Reset Rotation</strong> — puts the photo back to how it started.</li>
+  </ul>
+
+  <h2>Adding Grid Lines</h2>
+  <p>Tap the <strong>Grid 1</strong> tab at the bottom. There's a second, independent grid under <strong>Grid 2</strong> — handy if you want a coarse grid and a fine grid on the photo at the same time.</p>
+  <p>For each grid you can set:</p>
+  <table>
+    <tr><th>Control</th><th>What it does</th></tr>
+    <tr><td>Show Grid</td><td>Turns that grid on or off</td></tr>
+    <tr><td>Rows / Columns</td><td>Use the − and + buttons to set how many squares</td></tr>
+    <tr><td>Color</td><td>Tap a colored circle to pick the line color</td></tr>
+    <tr><td>Line Width</td><td>How thick the grid lines are</td></tr>
+    <tr><td>Opacity</td><td>How solid or see-through the lines are</td></tr>
+  </table>
+  <p>Change any of these and the grid updates on the photo immediately, so you can see the effect as you adjust.</p>
+
+  <h2>Zooming In and Moving Around</h2>
+  <ul>
+    <li><strong>To zoom in or out:</strong> scroll your mouse wheel (or two-finger scroll on a trackpad) while your cursor is over the photo.</li>
+    <li><strong>To move around once zoomed in:</strong> click and drag the photo, the same way you'd drag a picture in any program.</li>
+    <li><strong>To go back to normal size:</strong> scroll back out, or reload the page.</li>
+  </ul>
+  <p>On a touchscreen device, pinch with two fingers to zoom, and drag with one finger to move around.</p>
+
+  <h2>Saving Your Work</h2>
+  <p>Tap the <strong>Photo</strong> tab, then tap <strong>Save</strong>. This saves exactly what you're looking at — photo, grid, and black &amp; white all together — as a picture file in your <strong>Downloads</strong> folder.</p>
+
+  <h2>If Something Seems Stuck</h2>
+  <div class="callout">If a button or slider stops responding, the fastest fix is almost always: <strong>reload the page.</strong> Just refresh the browser (or close and reopen the app icon, if you pinned it). Your grid and color settings will still be there — you'll just need to pick your photo again.</div>
+</div>
+</body>
+</html>
