@@ -359,9 +359,16 @@
         <div class="label">Black &amp; White</div>
         <label class="switch"><input type="checkbox" id="bwToggle" checked><span class="track"></span><span class="thumb"></span></label>
       </div>
+      <div class="row" id="thresholdEnableRow">
+        <div>
+          <div class="label">Threshold</div>
+          <div class="sub">Off = smooth grayscale (many shades of gray). On = hard black-or-white cutoff.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="thresholdToggle"><span class="track"></span><span class="thumb"></span></label>
+      </div>
       <div class="field" id="thresholdField">
         <div class="field-head">
-          <span class="label">Threshold</span>
+          <span class="label">Threshold Level</span>
           <span class="value mono" id="thresholdVal">50%</span>
         </div>
         <input type="range" id="thresholdSlider" min="1" max="99" value="50">
@@ -463,6 +470,7 @@
     rotation: 0,
     fine: 0,
     bw: true,
+    thresholdEnabled: false,
     threshold: 50,
     grid1: { enabled: true, rows: 4, cols: 4, color: PALETTE[0], opacity: 85, width: 3 },
     grid2: { enabled: false, rows: 2, cols: 2, color: PALETTE[1], opacity: 85, width: 3 }
@@ -636,6 +644,7 @@
       Object.assign(state.grid1, saved.grid1 || {});
       Object.assign(state.grid2, saved.grid2 || {});
       if (typeof saved.bw === "boolean") state.bw = saved.bw;
+      if (typeof saved.thresholdEnabled === "boolean") state.thresholdEnabled = saved.thresholdEnabled;
       if (typeof saved.threshold === "number") state.threshold = saved.threshold;
     } catch (e) { /* ignore corrupt/blocked storage */ }
   }
@@ -670,12 +679,14 @@
   document.getElementById("pickBtnEmpty").addEventListener("click", pick);
 
   /* ---------------- rendering ---------------- */
-  function grayThreshold(threshold) {
-    // Returns an ImageData-backed canvas: binarized black/white at the given
-    // luminance cutoff (0-100 mapped to 0-255). Cached per threshold value
-    // since recomputing per-pixel on every drag frame would be slow on a
-    // large photo.
-    var key = threshold;
+  function grayThreshold(thresholdEnabled, threshold) {
+    // Returns an ImageData-backed canvas: either smooth grayscale (many
+    // shades, like Photos' B&W filter -- Nancy preferred this as the
+    // default, 2026-09-28) or, when thresholdEnabled, binarized black/white
+    // at the given luminance cutoff (0-100 mapped to 0-255). Cached per
+    // mode+value since recomputing per-pixel on every drag frame would be
+    // slow on a large photo.
+    var key = thresholdEnabled ? "t" + threshold : "gray";
     if (lastBwKey === key && grayThreshold._cache) return grayThreshold._cache;
     var w = srcCanvas.width, h = srcCanvas.height;
     var data = srcCtx.getImageData(0, 0, w, h);
@@ -683,7 +694,7 @@
     var cutoff = (threshold / 100) * 255;
     for (var i = 0; i < d.length; i += 4) {
       var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      var v = lum < cutoff ? 0 : 255;
+      var v = thresholdEnabled ? (lum < cutoff ? 0 : 255) : lum;
       d[i] = d[i + 1] = d[i + 2] = v;
     }
     var out = document.createElement("canvas");
@@ -735,7 +746,7 @@
     vctx.save();
     vctx.translate(view.width / 2, view.height / 2);
     vctx.rotate(angle);
-    var source = state.bw ? grayThreshold(state.threshold) : srcCanvas;
+    var source = state.bw ? grayThreshold(state.thresholdEnabled, state.threshold) : srcCanvas;
     vctx.drawImage(source, -iw * scale / 2, -ih * scale / 2, iw * scale, ih * scale);
     vctx.restore();
 
@@ -778,20 +789,29 @@
 
   /* ---------------- B&W controls ---------------- */
   var bwToggle = document.getElementById("bwToggle");
+  var thresholdToggle = document.getElementById("thresholdToggle");
   var thresholdField = document.getElementById("thresholdField");
   var thresholdSlider = document.getElementById("thresholdSlider");
   var thresholdVal = document.getElementById("thresholdVal");
 
   function syncBwUI() {
     bwToggle.checked = state.bw;
-    thresholdField.style.opacity = state.bw ? 1 : 0.4;
-    thresholdSlider.disabled = !state.bw;
+    thresholdToggle.checked = state.thresholdEnabled;
+    thresholdToggle.disabled = !state.bw;
+    document.getElementById("thresholdEnableRow").style.opacity = state.bw ? 1 : 0.4;
+    var showLevel = state.bw && state.thresholdEnabled;
+    thresholdField.style.opacity = showLevel ? 1 : 0.4;
+    thresholdSlider.disabled = !showLevel;
     thresholdSlider.value = state.threshold;
     thresholdVal.textContent = state.threshold + "%";
     document.querySelector('.tab-btn[data-panel="bw"]').classList.toggle("on", state.bw);
   }
   bwToggle.addEventListener("change", function () {
     state.bw = bwToggle.checked;
+    syncBwUI(); render(); saveSettings();
+  });
+  thresholdToggle.addEventListener("change", function () {
+    state.thresholdEnabled = thresholdToggle.checked;
     syncBwUI(); render(); saveSettings();
   });
   thresholdSlider.addEventListener("input", function () {
