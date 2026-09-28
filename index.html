@@ -1,0 +1,944 @@
+<title>Drawing Grid</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1C1917">
+<style>
+  :root {
+    --bg: #1C1917;
+    --surface: #262220;
+    --surface-2: #322D2A;
+    --surface-3: #3D3733;
+    --text: #EDE8E3;
+    --text-dim: #A69C93;
+    --text-faint: #726A62;
+    --accent: #6E93B8;
+    --accent-text: #0F1720;
+    --accent-soft: rgba(110, 147, 184, 0.16);
+    --border: #3D3733;
+    --danger: #C4634A;
+    --track: #171412;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #F2EEE8;
+      --surface: #FFFFFF;
+      --surface-2: #E9E3D9;
+      --surface-3: #DCD4C6;
+      --text: #221F1C;
+      --text-dim: #6B6259;
+      --text-faint: #9A9086;
+      --accent: #3E6690;
+      --accent-text: #FBFAF7;
+      --accent-soft: rgba(62, 102, 144, 0.12);
+      --border: #DCD4C6;
+      --danger: #A8442E;
+      --track: #D8D0C3;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1917; --surface: #262220; --surface-2: #322D2A; --surface-3: #3D3733;
+    --text: #EDE8E3; --text-dim: #A69C93; --text-faint: #726A62;
+    --accent: #6E93B8; --accent-text: #0F1720; --accent-soft: rgba(110, 147, 184, 0.16);
+    --border: #3D3733; --danger: #C4634A; --track: #171412;
+  }
+  :root[data-theme="light"] {
+    --bg: #F2EEE8; --surface: #FFFFFF; --surface-2: #E9E3D9; --surface-3: #DCD4C6;
+    --text: #221F1C; --text-dim: #6B6259; --text-faint: #9A9086;
+    --accent: #3E6690; --accent-text: #FBFAF7; --accent-soft: rgba(62, 102, 144, 0.12);
+    --border: #DCD4C6; --danger: #A8442E; --track: #D8D0C3;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+  }
+  body { height: 100dvh; overflow: hidden; }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Stage ---------- */
+  .stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      linear-gradient(135deg, var(--surface-2) 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(225deg, var(--surface-2) 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(315deg, var(--surface-2) 25%, transparent 25%) 0 0/20px 20px,
+      linear-gradient(45deg, var(--surface-2) 25%, var(--bg) 25%) 0 0/20px 20px;
+    overflow: hidden;
+    touch-action: none;
+  }
+  canvas#view {
+    max-width: 100%; max-height: 100%; touch-action: none;
+    transform-origin: 0 0;
+    will-change: transform;
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  .empty-state {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 24px; text-align: center;
+  }
+  .empty-state svg { opacity: 0.35; }
+  .empty-state p { margin: 0; color: var(--text-dim); font-size: 15px; max-width: 30ch; }
+  .empty-state .pick-btn { margin-top: 4px; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.35), transparent);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .topbar * { pointer-events: auto; }
+  .brand {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(20,18,16,0.55); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Bottom drawer ----------
+     Fixed overlay, deliberately NOT part of the flex flow with .stage -- it
+     floats on top of the photo instead of sharing vertical space with it, so
+     switching to a panel with more fields (e.g. Grid 1's rows/columns/color/
+     width/opacity) never resizes the photo underneath. Only ever covers it. */
+  .drawer {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
+    z-index: 10;
+    display: flex; flex-direction: column;
+    max-height: 72dvh;
+    transition: transform 0.28s cubic-bezier(.32,.72,0,1);
+  }
+  .drawer.collapsed { transform: translateY(calc(100% - 54px)); }
+
+  .drag-handle {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    height: 22px; cursor: grab;
+  }
+  .drag-handle::before {
+    content: ""; width: 36px; height: 4px; border-radius: 2px;
+    background: var(--surface-3);
+  }
+
+  .drawer-tabs {
+    flex-shrink: 0;
+    display: flex; gap: 4px;
+    padding: 2px 14px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .drawer-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 13px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .tab-btn .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--surface-3);
+  }
+  .tab-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .tab-btn.on .dot { background: var(--accent); }
+
+  .drawer-body {
+    padding: 4px 18px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .panel { display: none; flex-direction: column; gap: 18px; }
+  .panel.active { display: flex; }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .row .label {
+    font-size: 14px; font-weight: 600; color: var(--text);
+  }
+  .row .sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .field-head .label { font-size: 13px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .field-head .value { font-size: 14px; color: var(--text); }
+
+  /* Slider */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 34px; background: transparent; margin: 0;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px; border-radius: 3px; background: var(--track);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; margin-top: -10px;
+    border-radius: 50%; background: var(--accent);
+    border: 3px solid var(--surface);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--track); }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--accent);
+    border: 3px solid var(--surface);
+  }
+
+  /* Toggle switch */
+  .switch { position: relative; width: 46px; height: 28px; flex-shrink: 0; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .track {
+    position: absolute; inset: 0; border-radius: 100px; background: var(--surface-3);
+    transition: background 0.18s;
+  }
+  .switch .thumb {
+    position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.18s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track + .thumb { transform: translateX(18px); }
+
+  /* Stepper */
+  .stepper {
+    display: flex; align-items: center; gap: 0;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  .stepper button {
+    width: 38px; height: 38px; border: none; background: var(--surface-2);
+    color: var(--text); font-size: 18px; cursor: pointer; line-height: 1;
+  }
+  .stepper button:active { background: var(--surface-3); }
+  .stepper .val {
+    width: 40px; text-align: center; font-size: 15px; font-weight: 600;
+    background: var(--surface);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 11px 18px; border-radius: 11px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text);
+    font-size: 14.5px; font-weight: 600; cursor: pointer;
+  }
+  .btn:active { background: var(--surface-3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.block { width: 100%; }
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+  .btn svg { width: 17px; height: 17px; }
+
+  /* Color swatches */
+  .swatches { display: flex; gap: 10px; }
+  .swatch {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .swatch.selected { border-color: var(--text); }
+  .swatch::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: currentColor; }
+
+  .divider { height: 1px; background: var(--border); margin: 2px 0; }
+
+  .hidden { display: none !important; }
+  input[type="file"] { display: none; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translate(-50%, 12px);
+    background: var(--surface-3); color: var(--text);
+    padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; transition: opacity 0.2s, transform 0.2s;
+    z-index: 50; pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="view"></canvas>
+  <div class="empty-state" id="emptyState">
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+      <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+    </svg>
+    <p>Load a reference photo to lay a grid over it — from your library, or a file.</p>
+    <button class="btn primary pick-btn" id="pickBtnEmpty">Choose Photo</button>
+  </div>
+
+  <div class="topbar">
+    <span class="brand">Drawing Grid</span>
+    <button class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="drag-handle" id="dragHandle"></div>
+  <div class="drawer-tabs">
+    <button class="tab-btn active" data-panel="photo">Photo</button>
+    <button class="tab-btn on" data-panel="bw"><span class="dot"></span>B&amp;W</button>
+    <button class="tab-btn" data-panel="rotate">Rotate</button>
+    <button class="tab-btn on" data-panel="grid1"><span class="dot"></span>Grid 1</button>
+    <button class="tab-btn" data-panel="grid2"><span class="dot"></span>Grid 2</button>
+  </div>
+
+  <div class="drawer-body">
+    <!-- PHOTO -->
+    <div class="panel active" data-panel="photo">
+      <div class="btn-row">
+        <button class="btn primary" id="pickBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Photo Library
+        </button>
+        <button class="btn" id="saveBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Save
+        </button>
+      </div>
+      <div class="row">
+        <div>
+          <div class="label">Remember this setup</div>
+          <div class="sub">Grid, B&amp;W and rotation settings only — not the photo itself</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="persistToggle" checked><span class="track"></span><span class="thumb"></span></label>
+      </div>
+    </div>
+
+    <!-- B&W -->
+    <div class="panel" data-panel="bw">
+      <div class="row">
+        <div class="label">Black &amp; White</div>
+        <label class="switch"><input type="checkbox" id="bwToggle" checked><span class="track"></span><span class="thumb"></span></label>
+      </div>
+      <div class="field" id="thresholdField">
+        <div class="field-head">
+          <span class="label">Threshold</span>
+          <span class="value mono" id="thresholdVal">50%</span>
+        </div>
+        <input type="range" id="thresholdSlider" min="1" max="99" value="50">
+        <div class="sub">Low = mostly white, only deep shadows go black. High = mostly black, only the brightest lights stay white.</div>
+      </div>
+    </div>
+
+    <!-- ROTATE -->
+    <div class="panel" data-panel="rotate">
+      <div class="field-head" style="margin-bottom:-6px">
+        <span class="label">Angle</span>
+        <span class="value mono" id="rotateVal">0°</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn block" id="rotL">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          90° Left
+        </button>
+        <button class="btn block" id="rotR">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+          90° Right
+        </button>
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="label">Fine Adjust</span><span class="value mono" id="fineVal">0°</span></div>
+        <input type="range" id="fineSlider" min="-45" max="45" value="0">
+      </div>
+      <button class="btn block" id="rotReset">Reset Rotation</button>
+    </div>
+
+    <!-- GRID 1 -->
+    <div class="panel" data-panel="grid1">
+      <div class="row">
+        <div class="label">Show Grid 1</div>
+        <label class="switch"><input type="checkbox" id="g1Enable" checked><span class="track"></span><span class="thumb"></span></label>
+      </div>
+      <div class="row">
+        <span class="label">Rows</span>
+        <div class="stepper"><button data-g="1" data-f="rows" data-d="-1">−</button><span class="val mono" id="g1RowsVal">4</span><button data-g="1" data-f="rows" data-d="1">+</button></div>
+      </div>
+      <div class="row">
+        <span class="label">Columns</span>
+        <div class="stepper"><button data-g="1" data-f="cols" data-d="-1">−</button><span class="val mono" id="g1ColsVal">4</span><button data-g="1" data-f="cols" data-d="1">+</button></div>
+      </div>
+      <div class="field">
+        <span class="field-head"><span class="label">Color</span></span>
+        <div class="swatches" id="g1Swatches"></div>
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="label">Line Width</span><span class="value mono" id="g1WidthVal">3px</span></div>
+        <input type="range" id="g1Width" min="1" max="10" value="3">
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="label">Opacity</span><span class="value mono" id="g1OpVal">85%</span></div>
+        <input type="range" id="g1Opacity" min="10" max="100" value="85">
+      </div>
+    </div>
+
+    <!-- GRID 2 -->
+    <div class="panel" data-panel="grid2">
+      <div class="row">
+        <div class="label">Show Grid 2</div>
+        <label class="switch"><input type="checkbox" id="g2Enable"><span class="track"></span><span class="thumb"></span></label>
+      </div>
+      <div class="row">
+        <span class="label">Rows</span>
+        <div class="stepper"><button data-g="2" data-f="rows" data-d="-1">−</button><span class="val mono" id="g2RowsVal">2</span><button data-g="2" data-f="rows" data-d="1">+</button></div>
+      </div>
+      <div class="row">
+        <span class="label">Columns</span>
+        <div class="stepper"><button data-g="2" data-f="cols" data-d="-1">−</button><span class="val mono" id="g2ColsVal">2</span><button data-g="2" data-f="cols" data-d="1">+</button></div>
+      </div>
+      <div class="field">
+        <span class="field-head"><span class="label">Color</span></span>
+        <div class="swatches" id="g2Swatches"></div>
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="label">Line Width</span><span class="value mono" id="g2WidthVal">3px</span></div>
+        <input type="range" id="g2Width" min="1" max="10" value="3">
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="label">Opacity</span><span class="value mono" id="g2OpVal">85%</span></div>
+        <input type="range" id="g2Opacity" min="10" max="100" value="85">
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*">
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var PALETTE = ["#E4572E", "#3B6FA0", "#E0B23C", "#4C9A6A", "#C4634A", "#F5F2EC"];
+
+  var state = {
+    rotation: 0,
+    fine: 0,
+    bw: true,
+    threshold: 50,
+    grid1: { enabled: true, rows: 4, cols: 4, color: PALETTE[0], opacity: 85, width: 3 },
+    grid2: { enabled: false, rows: 2, cols: 2, color: PALETTE[1], opacity: 85, width: 3 }
+  };
+
+  var STORAGE_KEY = "drawingGridSettings.v1";
+  var img = null; // HTMLImageElement, the loaded source photo
+  var srcCanvas = document.createElement("canvas"); // cached grayscale/threshold source at native res
+  var srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
+  var lastBwKey = null; // cache key so we don't recompute threshold every render needlessly
+
+  var view = document.getElementById("view");
+  var vctx = view.getContext("2d");
+  var stage = document.getElementById("stage");
+
+  /* ---------------- pinch-zoom / pan ----------------
+     CSS-transform based: scales/pans the already-rendered canvas rather than
+     re-rendering at higher resolution -- simple and fast, plenty sharp for a
+     drawing reference at the zoom levels this needs. */
+  var zoom = 1, panX = 0, panY = 0;
+  var MIN_ZOOM = 1, MAX_ZOOM = 5;
+  var gesture = null; // active touch gesture info, or null
+
+  function applyZoomTransform() {
+    view.style.transform = "translate(" + panX + "px, " + panY + "px) scale(" + zoom + ")";
+    if (!mousePan) view.style.cursor = zoom > 1 ? "grab" : "";
+  }
+  function resetZoom() {
+    zoom = 1; panX = 0; panY = 0;
+    applyZoomTransform();
+  }
+  function clampZoom(z) { return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)); }
+
+  function touchPoint(t, rect) { return { x: t.clientX - rect.left, y: t.clientY - rect.top }; }
+  function touchDist(a, b) { return Math.hypot(b.x - a.x, b.y - a.y); }
+  function touchMid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+  // Rescale around a fixed screen point P: the content currently under P
+  // stays under P after the zoom level changes.
+  function zoomAroundPoint(newZoom, p) {
+    newZoom = clampZoom(newZoom);
+    var contentX = (p.x - panX) / zoom;
+    var contentY = (p.y - panY) / zoom;
+    panX = p.x - newZoom * contentX;
+    panY = p.y - newZoom * contentY;
+    zoom = newZoom;
+    applyZoomTransform();
+  }
+
+  // tapCandidate tracks whether the CURRENT gesture could still turn out to be
+  // a genuine single-finger tap (for double-tap-to-reset) -- it's cleared the
+  // moment a second finger joins (pinch) or the finger moves more than a few
+  // px (pan/drag), so it's never true for either half of a two-finger pinch
+  // release. Without this, releasing a pinch fires two separate touchend
+  // events (one per finger) milliseconds apart, which a naive "any single-
+  // finger touchend within 300ms of the last" check misreads as a double-tap
+  // and immediately resets the zoom you just set (Nancy, 2026-09-25).
+  var lastTapTime = 0;
+  var tapCandidate = null;
+  var TAP_MOVE_TOLERANCE = 10;
+
+  view.addEventListener("touchstart", function (e) {
+    if (!img) return;
+    var rect = view.getBoundingClientRect();
+    if (e.touches.length === 2) {
+      var p0 = touchPoint(e.touches[0], rect), p1 = touchPoint(e.touches[1], rect);
+      gesture = { type: "pinch", startDist: touchDist(p0, p1), startZoom: zoom };
+      tapCandidate = null;
+    } else if (e.touches.length === 1) {
+      var p = touchPoint(e.touches[0], rect);
+      gesture = { type: "pan", lastX: p.x, lastY: p.y };
+      tapCandidate = { x: p.x, y: p.y };
+    }
+  }, { passive: true });
+
+  view.addEventListener("touchmove", function (e) {
+    if (!img || !gesture) return;
+    var rect = view.getBoundingClientRect();
+    if (gesture.type === "pinch" && e.touches.length === 2) {
+      e.preventDefault();
+      var p0 = touchPoint(e.touches[0], rect), p1 = touchPoint(e.touches[1], rect);
+      var dist = touchDist(p0, p1);
+      var mid = touchMid(p0, p1);
+      var scaleFactor = dist / gesture.startDist;
+      zoomAroundPoint(gesture.startZoom * scaleFactor, mid);
+    } else if (gesture.type === "pan" && e.touches.length === 1) {
+      var p = touchPoint(e.touches[0], rect);
+      if (tapCandidate && Math.hypot(p.x - tapCandidate.x, p.y - tapCandidate.y) > TAP_MOVE_TOLERANCE) {
+        tapCandidate = null;
+      }
+      if (zoom <= 1) return; // nothing to pan when fully zoomed out
+      e.preventDefault();
+      panX += p.x - gesture.lastX;
+      panY += p.y - gesture.lastY;
+      gesture.lastX = p.x; gesture.lastY = p.y;
+      applyZoomTransform();
+    }
+  }, { passive: false });
+
+  view.addEventListener("touchend", function (e) {
+    if (e.touches.length === 1 && gesture && gesture.type === "pinch") {
+      // one finger lifted mid-pinch -- switch to panning with the remaining finger
+      var rect = view.getBoundingClientRect();
+      var p = touchPoint(e.touches[0], rect);
+      gesture = { type: "pan", lastX: p.x, lastY: p.y };
+      tapCandidate = null;
+      return;
+    }
+    if (e.touches.length === 0) {
+      if (tapCandidate) {
+        var now = Date.now();
+        if (now - lastTapTime < 300) { resetZoom(); lastTapTime = 0; }
+        else { lastTapTime = now; }
+      }
+      gesture = null;
+      tapCandidate = null;
+    }
+  });
+
+  // Trackpad/mouse-wheel zoom for desktop.
+  view.addEventListener("wheel", function (e) {
+    if (!img) return;
+    e.preventDefault();
+    var rect = view.getBoundingClientRect();
+    var p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    zoomAroundPoint(zoom * (e.deltaY < 0 ? 1.08 : 0.93), p);
+  }, { passive: false });
+
+  // Click-and-drag to pan with a mouse (desktop equivalent of the single-
+  // finger touch pan below) -- only active once zoomed in, same as touch.
+  var mousePan = null;
+  view.addEventListener("mousedown", function (e) {
+    if (!img || zoom <= 1) return;
+    e.preventDefault(); // suppress the browser's native image-drag/ghost-drag on the canvas
+    mousePan = { lastX: e.clientX, lastY: e.clientY };
+    view.style.cursor = "grabbing";
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!mousePan) return;
+    panX += e.clientX - mousePan.lastX;
+    panY += e.clientY - mousePan.lastY;
+    mousePan.lastX = e.clientX; mousePan.lastY = e.clientY;
+    applyZoomTransform();
+  });
+  window.addEventListener("mouseup", function () {
+    if (mousePan) { mousePan = null; view.style.cursor = zoom > 1 ? "grab" : ""; }
+  });
+  var emptyState = document.getElementById("emptyState");
+  var drawer = document.getElementById("drawer");
+  var toastEl = document.getElementById("toast");
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function () { toastEl.classList.remove("show"); }, 1800);
+  }
+
+  /* ---------------- persistence ---------------- */
+  function saveSettings() {
+    if (!document.getElementById("persistToggle").checked) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* storage unavailable — silently skip */ }
+  }
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      Object.assign(state.grid1, saved.grid1 || {});
+      Object.assign(state.grid2, saved.grid2 || {});
+      if (typeof saved.bw === "boolean") state.bw = saved.bw;
+      if (typeof saved.threshold === "number") state.threshold = saved.threshold;
+    } catch (e) { /* ignore corrupt/blocked storage */ }
+  }
+
+  /* ---------------- image loading ---------------- */
+  document.getElementById("fileInput").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var image = new Image();
+      image.onload = function () {
+        img = image;
+        srcCanvas.width = img.naturalWidth;
+        srcCanvas.height = img.naturalHeight;
+        srcCtx.drawImage(img, 0, 0);
+        lastBwKey = null;
+        emptyState.classList.add("hidden");
+        state.rotation = 0; state.fine = 0;
+        document.getElementById("rotateVal").textContent = "0°";
+        document.getElementById("fineSlider").value = 0;
+        document.getElementById("fineVal").textContent = "0°";
+        resetZoom();
+        render();
+      };
+      image.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  function pick() { document.getElementById("fileInput").click(); }
+  document.getElementById("pickBtn").addEventListener("click", pick);
+  document.getElementById("pickBtnEmpty").addEventListener("click", pick);
+
+  /* ---------------- rendering ---------------- */
+  function grayThreshold(threshold) {
+    // Returns an ImageData-backed canvas: binarized black/white at the given
+    // luminance cutoff (0-100 mapped to 0-255). Cached per threshold value
+    // since recomputing per-pixel on every drag frame would be slow on a
+    // large photo.
+    var key = threshold;
+    if (lastBwKey === key && grayThreshold._cache) return grayThreshold._cache;
+    var w = srcCanvas.width, h = srcCanvas.height;
+    var data = srcCtx.getImageData(0, 0, w, h);
+    var d = data.data;
+    var cutoff = (threshold / 100) * 255;
+    for (var i = 0; i < d.length; i += 4) {
+      var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      var v = lum < cutoff ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    var out = document.createElement("canvas");
+    out.width = w; out.height = h;
+    out.getContext("2d").putImageData(data, 0, 0);
+    lastBwKey = key;
+    grayThreshold._cache = out;
+    return out;
+  }
+
+  function drawGrid(ctx, w, h, g) {
+    if (!g.enabled || g.rows < 1 || g.cols < 1) return;
+    ctx.save();
+    ctx.globalAlpha = g.opacity / 100;
+    ctx.strokeStyle = g.color;
+    ctx.lineWidth = g.width;
+    ctx.beginPath();
+    for (var c = 1; c < g.cols; c++) {
+      var x = (w / g.cols) * c;
+      ctx.moveTo(x, 0); ctx.lineTo(x, h);
+    }
+    for (var r = 1; r < g.rows; r++) {
+      var y = (h / g.rows) * r;
+      ctx.moveTo(0, y); ctx.lineTo(w, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function render() {
+    if (!img) { view.width = 0; view.height = 0; return; }
+
+    var angle = ((state.rotation + state.fine) * Math.PI) / 180;
+    var iw = srcCanvas.width, ih = srcCanvas.height;
+    var cos = Math.abs(Math.cos(angle)), sin = Math.abs(Math.sin(angle));
+    var bw = iw * cos + ih * sin;
+    var bh = iw * sin + ih * cos;
+
+    var maxDim = 1400; // cap render resolution — plenty for on-screen tracing, keeps redraws snappy
+    var scale = Math.min(1, maxDim / Math.max(bw, bh));
+    var newW = Math.round(bw * scale), newH = Math.round(bh * scale);
+    // A rotation change alters the canvas's own box size -- any active pinch
+    // zoom/pan (which is relative to that box) would end up misaligned, so
+    // snap back to fit-to-screen whenever the box actually changes size.
+    if (newW !== view.width || newH !== view.height) resetZoom();
+    view.width = newW;
+    view.height = newH;
+
+    vctx.save();
+    vctx.translate(view.width / 2, view.height / 2);
+    vctx.rotate(angle);
+    var source = state.bw ? grayThreshold(state.threshold) : srcCanvas;
+    vctx.drawImage(source, -iw * scale / 2, -ih * scale / 2, iw * scale, ih * scale);
+    vctx.restore();
+
+    drawGrid(vctx, view.width, view.height, state.grid1);
+    drawGrid(vctx, view.width, view.height, state.grid2);
+  }
+
+  /* ---------------- drawer tabs ---------------- */
+  var tabs = document.querySelectorAll(".tab-btn");
+  var panels = document.querySelectorAll(".panel");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (t) { t.classList.remove("active"); });
+      panels.forEach(function (p) { p.classList.remove("active"); });
+      tab.classList.add("active");
+      document.querySelector('.panel[data-panel="' + tab.dataset.panel + '"]').classList.add("active");
+      if (drawer.classList.contains("collapsed")) drawer.classList.remove("collapsed");
+    });
+  });
+
+  /* drag handle collapse/expand */
+  (function () {
+    var startY = 0, dragging = false;
+    var handle = document.getElementById("dragHandle");
+    function start(y) { dragging = true; startY = y; }
+    function move(y) {
+      if (!dragging) return;
+      if (y - startY > 40) { drawer.classList.add("collapsed"); dragging = false; }
+      else if (startY - y > 40) { drawer.classList.remove("collapsed"); dragging = false; }
+    }
+    function end() { dragging = false; }
+    handle.addEventListener("touchstart", function (e) { start(e.touches[0].clientY); }, { passive: true });
+    handle.addEventListener("touchmove", function (e) { move(e.touches[0].clientY); }, { passive: true });
+    handle.addEventListener("touchend", end);
+    handle.addEventListener("mousedown", function (e) { start(e.clientY); });
+    window.addEventListener("mousemove", function (e) { move(e.clientY); });
+    window.addEventListener("mouseup", end);
+    handle.addEventListener("click", function () { drawer.classList.toggle("collapsed"); });
+  })();
+
+  /* ---------------- B&W controls ---------------- */
+  var bwToggle = document.getElementById("bwToggle");
+  var thresholdField = document.getElementById("thresholdField");
+  var thresholdSlider = document.getElementById("thresholdSlider");
+  var thresholdVal = document.getElementById("thresholdVal");
+
+  function syncBwUI() {
+    bwToggle.checked = state.bw;
+    thresholdField.style.opacity = state.bw ? 1 : 0.4;
+    thresholdSlider.disabled = !state.bw;
+    thresholdSlider.value = state.threshold;
+    thresholdVal.textContent = state.threshold + "%";
+    document.querySelector('.tab-btn[data-panel="bw"]').classList.toggle("on", state.bw);
+  }
+  bwToggle.addEventListener("change", function () {
+    state.bw = bwToggle.checked;
+    syncBwUI(); render(); saveSettings();
+  });
+  thresholdSlider.addEventListener("input", function () {
+    state.threshold = parseInt(thresholdSlider.value, 10);
+    thresholdVal.textContent = state.threshold + "%";
+    render();
+  });
+  thresholdSlider.addEventListener("change", saveSettings);
+
+  /* ---------------- rotate controls ---------------- */
+  var rotateVal = document.getElementById("rotateVal");
+  var fineSlider = document.getElementById("fineSlider");
+  var fineVal = document.getElementById("fineVal");
+
+  function normalizeRotation() {
+    state.rotation = ((state.rotation % 360) + 360) % 360;
+  }
+  document.getElementById("rotL").addEventListener("click", function () {
+    state.rotation -= 90; normalizeRotation();
+    rotateVal.textContent = state.rotation + "°";
+    render(); saveSettings();
+  });
+  document.getElementById("rotR").addEventListener("click", function () {
+    state.rotation += 90; normalizeRotation();
+    rotateVal.textContent = state.rotation + "°";
+    render(); saveSettings();
+  });
+  document.getElementById("rotReset").addEventListener("click", function () {
+    state.rotation = 0; state.fine = 0;
+    rotateVal.textContent = "0°"; fineVal.textContent = "0°"; fineSlider.value = 0;
+    render(); saveSettings();
+  });
+  fineSlider.addEventListener("input", function () {
+    state.fine = parseInt(fineSlider.value, 10);
+    fineVal.textContent = (state.fine > 0 ? "+" : "") + state.fine + "°";
+    render();
+  });
+  fineSlider.addEventListener("change", saveSettings);
+
+  /* ---------------- grid controls ---------------- */
+  function buildSwatches(container, gridKey) {
+    PALETTE.forEach(function (color) {
+      var sw = document.createElement("div");
+      sw.className = "swatch";
+      sw.style.color = color;
+      sw.style.background = "var(--surface-2)";
+      sw.addEventListener("click", function () {
+        state[gridKey].color = color;
+        syncGridUI(gridKey);
+        render(); saveSettings();
+      });
+      container.appendChild(sw);
+    });
+  }
+  function syncGridUI(key) {
+    var g = state[key];
+    var n = key === "grid1" ? "1" : "2";
+    document.getElementById("g" + n + "Enable").checked = g.enabled;
+    document.getElementById("g" + n + "RowsVal").textContent = g.rows;
+    document.getElementById("g" + n + "ColsVal").textContent = g.cols;
+    document.getElementById("g" + n + "Width").value = g.width;
+    document.getElementById("g" + n + "WidthVal").textContent = g.width + "px";
+    document.getElementById("g" + n + "Opacity").value = g.opacity;
+    document.getElementById("g" + n + "OpVal").textContent = g.opacity + "%";
+    document.querySelectorAll("#g" + n + "Swatches .swatch").forEach(function (sw) {
+      sw.classList.toggle("selected", sw.style.color === hexToRgb(g.color) || sw.style.color === g.color);
+    });
+    document.querySelector('.tab-btn[data-panel="' + key.replace("grid", "grid") + '"]').classList.toggle("on", g.enabled);
+  }
+  function hexToRgb(hex) {
+    // normalize for comparison against computed style.color (browsers report rgb())
+    var c = document.createElement("div");
+    c.style.color = hex;
+    document.body.appendChild(c);
+    var rgb = getComputedStyle(c).color;
+    document.body.removeChild(c);
+    return rgb;
+  }
+
+  buildSwatches(document.getElementById("g1Swatches"), "grid1");
+  buildSwatches(document.getElementById("g2Swatches"), "grid2");
+
+  document.getElementById("g1Enable").addEventListener("change", function (e) {
+    state.grid1.enabled = e.target.checked; syncGridUI("grid1"); render(); saveSettings();
+  });
+  document.getElementById("g2Enable").addEventListener("change", function (e) {
+    state.grid2.enabled = e.target.checked; syncGridUI("grid2"); render(); saveSettings();
+  });
+  document.getElementById("g1Width").addEventListener("input", function (e) {
+    state.grid1.width = parseInt(e.target.value, 10);
+    document.getElementById("g1WidthVal").textContent = state.grid1.width + "px";
+    render();
+  });
+  document.getElementById("g1Width").addEventListener("change", saveSettings);
+  document.getElementById("g2Width").addEventListener("input", function (e) {
+    state.grid2.width = parseInt(e.target.value, 10);
+    document.getElementById("g2WidthVal").textContent = state.grid2.width + "px";
+    render();
+  });
+  document.getElementById("g2Width").addEventListener("change", saveSettings);
+  document.getElementById("g1Opacity").addEventListener("input", function (e) {
+    state.grid1.opacity = parseInt(e.target.value, 10);
+    document.getElementById("g1OpVal").textContent = state.grid1.opacity + "%";
+    render();
+  });
+  document.getElementById("g1Opacity").addEventListener("change", saveSettings);
+  document.getElementById("g2Opacity").addEventListener("input", function (e) {
+    state.grid2.opacity = parseInt(e.target.value, 10);
+    document.getElementById("g2OpVal").textContent = state.grid2.opacity + "%";
+    render();
+  });
+  document.getElementById("g2Opacity").addEventListener("change", saveSettings);
+
+  document.querySelectorAll(".stepper button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var key = "grid" + btn.dataset.g;
+      var field = btn.dataset.f;
+      var delta = parseInt(btn.dataset.d, 10);
+      var next = state[key][field] + delta;
+      state[key][field] = Math.max(1, Math.min(20, next));
+      syncGridUI(key);
+      render(); saveSettings();
+    });
+  });
+
+  /* ---------------- save image ---------------- */
+  document.getElementById("saveBtn").addEventListener("click", function () {
+    if (!img) { showToast("Load a photo first"); return; }
+    view.toBlob(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "drawing-grid.png";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      showToast("Saved — check your Downloads");
+    }, "image/png");
+  });
+
+  /* ---------------- theme toggle ---------------- */
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    var root = document.documentElement;
+    var current = root.getAttribute("data-theme");
+    var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var effectiveIsDark = current ? current === "dark" : prefersDark;
+    root.setAttribute("data-theme", effectiveIsDark ? "light" : "dark");
+  });
+
+  /* ---------------- init ---------------- */
+  loadSettings();
+  syncBwUI();
+  syncGridUI("grid1");
+  syncGridUI("grid2");
+  window.addEventListener("resize", render);
+  render();
+})();
+</script>
