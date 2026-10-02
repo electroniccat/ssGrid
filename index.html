@@ -879,7 +879,9 @@
     document.querySelectorAll("#g" + n + "Swatches .swatch").forEach(function (sw) {
       sw.classList.toggle("selected", sw.style.color === hexToRgb(g.color) || sw.style.color === g.color);
     });
-    document.querySelector('.tab-btn[data-panel="' + key.replace("grid", "grid") + '"]').classList.toggle("on", g.enabled);
+    var tabBtn = document.querySelector('.tab-btn[data-panel="' + key.replace("grid", "grid") + '"]');
+    tabBtn.classList.toggle("on", g.enabled);
+    tabBtn.querySelector(".dot").style.background = g.enabled ? g.color : "";
   }
   function hexToRgb(hex) {
     // normalize for comparison against computed style.color (browsers report rgb())
