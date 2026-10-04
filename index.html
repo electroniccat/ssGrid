@@ -769,13 +769,13 @@
 
   /* drag handle collapse/expand */
   (function () {
-    var startY = 0, dragging = false;
+    var startY = 0, dragging = false, draggedToggle = false;
     var handle = document.getElementById("dragHandle");
     function start(y) { dragging = true; startY = y; }
     function move(y) {
       if (!dragging) return;
-      if (y - startY > 40) { drawer.classList.add("collapsed"); dragging = false; }
-      else if (startY - y > 40) { drawer.classList.remove("collapsed"); dragging = false; }
+      if (y - startY > 40) { drawer.classList.add("collapsed"); dragging = false; draggedToggle = true; }
+      else if (startY - y > 40) { drawer.classList.remove("collapsed"); dragging = false; draggedToggle = true; }
     }
     function end() { dragging = false; }
     handle.addEventListener("touchstart", function (e) { start(e.touches[0].clientY); }, { passive: true });
@@ -784,7 +784,14 @@
     handle.addEventListener("mousedown", function (e) { start(e.clientY); });
     window.addEventListener("mousemove", function (e) { move(e.clientY); });
     window.addEventListener("mouseup", end);
-    handle.addEventListener("click", function () { drawer.classList.toggle("collapsed"); });
+    // A mouse click still fires right after a drag that already toggled the
+    // drawer (unlike touch, where the browser suppresses the synthetic click
+    // once you've moved past a few px) -- skip it once so the drag isn't
+    // immediately undone.
+    handle.addEventListener("click", function () {
+      if (draggedToggle) { draggedToggle = false; return; }
+      drawer.classList.toggle("collapsed");
+    });
   })();
 
   /* ---------------- B&W controls ---------------- */
