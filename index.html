@@ -1,3 +1,4 @@
+<meta charset="UTF-8">
 <title>Drawing Grid</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -162,8 +163,8 @@
   .drawer-tabs::-webkit-scrollbar { display: none; }
   .tab-btn {
     flex-shrink: 0;
-    display: flex; align-items: center; gap: 6px;
-    padding: 8px 13px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 13px 7px 10px;
     border-radius: 100px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -182,6 +183,19 @@
     color: var(--text);
   }
   .tab-btn.on .dot { background: var(--accent); }
+  /* On/off checkbox at the leading edge of a tab, separate from tapping the
+     label to open that tab's settings -- turning a feature off/on no longer
+     requires opening its panel first. */
+  .tab-toggle {
+    width: 15px; height: 15px; margin: 0; flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .tab-open {
+    display: flex; align-items: center; gap: 6px;
+    background: none; border: none; padding: 0; margin: 0;
+    color: inherit; font: inherit; cursor: pointer;
+  }
 
   .drawer-body {
     padding: 4px 18px calc(18px + env(safe-area-inset-bottom));
@@ -304,7 +318,7 @@
       <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
       <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
     </svg>
-    <p>Load a reference photo to lay a grid over it — from your library, or a file.</p>
+    <p>Load a reference photo to lay a grid over it.</p>
     <button class="btn primary pick-btn" id="pickBtnEmpty">Choose Photo</button>
   </div>
 
@@ -325,10 +339,22 @@
   <div class="drag-handle" id="dragHandle"></div>
   <div class="drawer-tabs">
     <button class="tab-btn active" data-panel="photo">Photo</button>
-    <button class="tab-btn on" data-panel="bw"><span class="dot"></span>B&amp;W</button>
-    <button class="tab-btn" data-panel="rotate">Rotate</button>
-    <button class="tab-btn on" data-panel="grid1"><span class="dot"></span>Grid 1</button>
-    <button class="tab-btn" data-panel="grid2"><span class="dot"></span>Grid 2</button>
+    <div class="tab-btn on" data-panel="bw">
+      <input type="checkbox" class="tab-toggle" id="tabToggle-bw" checked aria-label="Enable B&amp;W">
+      <button type="button" class="tab-open" data-panel="bw"><span class="dot"></span>B&amp;W</button>
+    </div>
+    <div class="tab-btn" data-panel="rotate">
+      <input type="checkbox" class="tab-toggle" id="tabToggle-rotate" aria-label="Enable Rotate">
+      <button type="button" class="tab-open" data-panel="rotate">Rotate</button>
+    </div>
+    <div class="tab-btn on" data-panel="grid1">
+      <input type="checkbox" class="tab-toggle" id="tabToggle-grid1" checked aria-label="Enable Grid 1">
+      <button type="button" class="tab-open" data-panel="grid1"><span class="dot"></span>Grid 1</button>
+    </div>
+    <div class="tab-btn" data-panel="grid2">
+      <input type="checkbox" class="tab-toggle" id="tabToggle-grid2" aria-label="Enable Grid 2">
+      <button type="button" class="tab-open" data-panel="grid2"><span class="dot"></span>Grid 2</button>
+    </div>
   </div>
 
   <div class="drawer-body">
@@ -667,6 +693,7 @@
         document.getElementById("rotateVal").textContent = "0°";
         document.getElementById("fineSlider").value = 0;
         document.getElementById("fineVal").textContent = "0°";
+        syncRotateToggle();
         resetZoom();
         render();
       };
@@ -755,14 +782,19 @@
   }
 
   /* ---------------- drawer tabs ---------------- */
-  var tabs = document.querySelectorAll(".tab-btn");
+  // Opening a panel (Photo's own button, or the label part of a toggleable
+  // tab) is now separate from turning that tab's feature on/off (the
+  // checkbox next to the label) -- they're sibling controls, not nested, so
+  // clicking one never also triggers the other.
+  var tabOpeners = document.querySelectorAll('.tab-btn[data-panel="photo"], .tab-open');
+  var tabPills = document.querySelectorAll(".tab-btn");
   var panels = document.querySelectorAll(".panel");
-  tabs.forEach(function (tab) {
-    tab.addEventListener("click", function () {
-      tabs.forEach(function (t) { t.classList.remove("active"); });
+  tabOpeners.forEach(function (opener) {
+    opener.addEventListener("click", function () {
+      tabPills.forEach(function (t) { t.classList.remove("active"); });
       panels.forEach(function (p) { p.classList.remove("active"); });
-      tab.classList.add("active");
-      document.querySelector('.panel[data-panel="' + tab.dataset.panel + '"]').classList.add("active");
+      opener.closest(".tab-btn").classList.add("active");
+      document.querySelector('.panel[data-panel="' + opener.dataset.panel + '"]').classList.add("active");
       if (drawer.classList.contains("collapsed")) drawer.classList.remove("collapsed");
     });
   });
@@ -796,6 +828,7 @@
 
   /* ---------------- B&W controls ---------------- */
   var bwToggle = document.getElementById("bwToggle");
+  var tabToggleBw = document.getElementById("tabToggle-bw");
   var thresholdToggle = document.getElementById("thresholdToggle");
   var thresholdField = document.getElementById("thresholdField");
   var thresholdSlider = document.getElementById("thresholdSlider");
@@ -803,6 +836,7 @@
 
   function syncBwUI() {
     bwToggle.checked = state.bw;
+    tabToggleBw.checked = state.bw;
     thresholdToggle.checked = state.thresholdEnabled;
     thresholdToggle.disabled = !state.bw;
     document.getElementById("thresholdEnableRow").style.opacity = state.bw ? 1 : 0.4;
@@ -815,6 +849,14 @@
   }
   bwToggle.addEventListener("change", function () {
     state.bw = bwToggle.checked;
+    syncBwUI(); render(); saveSettings();
+  });
+  // Same state, reached from the tab row instead of inside the B&W panel --
+  // kept as a separate listener (both just set state.bw and resync) rather
+  // than simulating a click on bwToggle, so each checkbox's own native
+  // "change" semantics stay intact.
+  tabToggleBw.addEventListener("change", function () {
+    state.bw = tabToggleBw.checked;
     syncBwUI(); render(); saveSettings();
   });
   thresholdToggle.addEventListener("change", function () {
@@ -832,31 +874,62 @@
   var rotateVal = document.getElementById("rotateVal");
   var fineSlider = document.getElementById("fineSlider");
   var fineVal = document.getElementById("fineVal");
+  var tabToggleRotate = document.getElementById("tabToggle-rotate");
 
   function normalizeRotation() {
     state.rotation = ((state.rotation % 360) + 360) % 360;
   }
+  // Rotate has no separate on/off flag of its own (unlike B&W/Grid 1/Grid 2)
+  // -- it's just a number, 0° meaning "off". So its tab checkbox reflects
+  // whether any rotation is currently applied, and unchecking it means
+  // "reset to 0°", same as the Reset Rotation button. Checking it back on
+  // has nothing saved to restore (by design -- keeps this simple), so it
+  // just flips back off until the user actually rotates something again.
+  function syncRotateToggle() {
+    var active = (state.rotation !== 0 || state.fine !== 0);
+    tabToggleRotate.checked = active;
+    document.querySelector('.tab-btn[data-panel="rotate"]').classList.toggle("on", active);
+  }
+  tabToggleRotate.addEventListener("change", function () {
+    if (!tabToggleRotate.checked) {
+      state.rotation = 0; state.fine = 0;
+      rotateVal.textContent = "0°"; fineVal.textContent = "0°"; fineSlider.value = 0;
+      render(); saveSettings();
+      syncRotateToggle();
+    } else {
+      // Nothing stored to turn back "on" -- open the panel instead of just
+      // silently flipping back off, so checking the box actually leads
+      // somewhere (set a rotation) rather than appearing to do nothing.
+      tabToggleRotate.checked = false;
+      document.querySelector('.tab-open[data-panel="rotate"]').click();
+    }
+  });
   document.getElementById("rotL").addEventListener("click", function () {
     state.rotation -= 90; normalizeRotation();
     rotateVal.textContent = state.rotation + "°";
+    syncRotateToggle();
     render(); saveSettings();
   });
   document.getElementById("rotR").addEventListener("click", function () {
     state.rotation += 90; normalizeRotation();
     rotateVal.textContent = state.rotation + "°";
+    syncRotateToggle();
     render(); saveSettings();
   });
   document.getElementById("rotReset").addEventListener("click", function () {
     state.rotation = 0; state.fine = 0;
     rotateVal.textContent = "0°"; fineVal.textContent = "0°"; fineSlider.value = 0;
+    syncRotateToggle();
     render(); saveSettings();
   });
   fineSlider.addEventListener("input", function () {
     state.fine = parseInt(fineSlider.value, 10);
     fineVal.textContent = (state.fine > 0 ? "+" : "") + state.fine + "°";
+    syncRotateToggle();
     render();
   });
   fineSlider.addEventListener("change", saveSettings);
+  syncRotateToggle();
 
   /* ---------------- grid controls ---------------- */
   function buildSwatches(container, gridKey) {
@@ -877,6 +950,7 @@
     var g = state[key];
     var n = key === "grid1" ? "1" : "2";
     document.getElementById("g" + n + "Enable").checked = g.enabled;
+    document.getElementById("tabToggle-" + key).checked = g.enabled;
     document.getElementById("g" + n + "RowsVal").textContent = g.rows;
     document.getElementById("g" + n + "ColsVal").textContent = g.cols;
     document.getElementById("g" + n + "Width").value = g.width;
@@ -907,6 +981,14 @@
     state.grid1.enabled = e.target.checked; syncGridUI("grid1"); render(); saveSettings();
   });
   document.getElementById("g2Enable").addEventListener("change", function (e) {
+    state.grid2.enabled = e.target.checked; syncGridUI("grid2"); render(); saveSettings();
+  });
+  // Same two switches, reached from the tab row instead of inside each
+  // grid's own panel.
+  document.getElementById("tabToggle-grid1").addEventListener("change", function (e) {
+    state.grid1.enabled = e.target.checked; syncGridUI("grid1"); render(); saveSettings();
+  });
+  document.getElementById("tabToggle-grid2").addEventListener("change", function (e) {
     state.grid2.enabled = e.target.checked; syncGridUI("grid2"); render(); saveSettings();
   });
   document.getElementById("g1Width").addEventListener("input", function (e) {
