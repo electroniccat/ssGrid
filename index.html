@@ -373,7 +373,7 @@
       <div class="row">
         <div>
           <div class="label">Remember this setup</div>
-          <div class="sub">Grid, B&amp;W and rotation settings only — not the photo itself</div>
+          <div class="sub">Grid, B&amp;W, and rotation settings, plus your last photo</div>
         </div>
         <label class="switch"><input type="checkbox" id="persistToggle" checked><span class="track"></span><span class="thumb"></span></label>
       </div>
@@ -503,6 +503,7 @@
   };
 
   var STORAGE_KEY = "drawingGridSettings.v1";
+  var REMEMBER_KEY = "drawingGridRemember.v1";
   var img = null; // HTMLImageElement, the loaded source photo
   var srcCanvas = document.createElement("canvas"); // cached grayscale/threshold source at native res
   var srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
@@ -675,10 +676,48 @@
     } catch (e) { /* ignore corrupt/blocked storage */ }
   }
 
+  /* ---------------- photo persistence (IndexedDB) ---------------- */
+  // localStorage (above) has a small, text-only quota -- nowhere near
+  // enough for an actual photo. IndexedDB holds real binary data with a
+  // much larger quota (hundreds of MB+, device-dependent) and works on
+  // phones/tablets too, so the last-used photo can be remembered the same
+  // way the grid/color settings are, gated by the same "Remember this
+  // setup" switch. Added 2026-10-11 at Nancy's request -- previously the
+  // photo was deliberately never persisted; this replaces that limitation,
+  // it wasn't a hard constraint, just localStorage being the wrong tool for it.
+  var PHOTO_DB_NAME = "drawingGridPhotoDB";
+  var PHOTO_STORE = "photo";
+  var PHOTO_KEY = "lastPhoto";
+  function openPhotoDB(callback) {
+    if (!window.indexedDB) { callback(null); return; }
+    var req;
+    try { req = indexedDB.open(PHOTO_DB_NAME, 1); }
+    catch (e) { callback(null); return; }
+    req.onupgradeneeded = function () { req.result.createObjectStore(PHOTO_STORE); };
+    req.onsuccess = function () { callback(req.result); };
+    req.onerror = function () { callback(null); };
+  }
+  function savePhotoBlob(blob) {
+    if (!document.getElementById("persistToggle").checked) return;
+    openPhotoDB(function (db) {
+      if (!db) return;
+      try { db.transaction(PHOTO_STORE, "readwrite").objectStore(PHOTO_STORE).put(blob, PHOTO_KEY); }
+      catch (e) { /* storage unavailable -- silently skip */ }
+    });
+  }
+  function loadLastPhoto() {
+    if (!document.getElementById("persistToggle").checked) return;
+    openPhotoDB(function (db) {
+      if (!db) return;
+      try {
+        var req = db.transaction(PHOTO_STORE, "readonly").objectStore(PHOTO_STORE).get(PHOTO_KEY);
+        req.onsuccess = function () { if (req.result) loadImageBlob(req.result); };
+      } catch (e) { /* ignore */ }
+    });
+  }
+
   /* ---------------- image loading ---------------- */
-  document.getElementById("fileInput").addEventListener("change", function (e) {
-    var file = e.target.files && e.target.files[0];
-    if (!file) return;
+  function loadImageBlob(file) {
     var reader = new FileReader();
     reader.onload = function (ev) {
       var image = new Image();
@@ -700,6 +739,12 @@
       image.src = ev.target.result;
     };
     reader.readAsDataURL(file);
+  }
+  document.getElementById("fileInput").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    loadImageBlob(file);
+    savePhotoBlob(file);
   });
   function pick() { document.getElementById("fileInput").click(); }
   document.getElementById("pickBtn").addEventListener("click", pick);
@@ -789,6 +834,15 @@
   var tabOpeners = document.querySelectorAll('.tab-btn[data-panel="photo"], .tab-open');
   var tabPills = document.querySelectorAll(".tab-btn");
   var panels = document.querySelectorAll(".panel");
+  var drawerBody = document.querySelector(".drawer-body");
+  // The drawer body is one shared scrollable area across all panels, so a
+  // panel can open already scrolled partway down from whatever position was
+  // left on a previous, taller panel -- e.g. opening B&W right after
+  // scrolling through Grid 1 could leave the Threshold controls stuck above
+  // the visible area. Reset to the top whenever a panel opens.
+  function scrollPanelToTop() {
+    drawerBody.scrollTo({ top: 0, behavior: "smooth" });
+  }
   tabOpeners.forEach(function (opener) {
     opener.addEventListener("click", function () {
       tabPills.forEach(function (t) { t.classList.remove("active"); });
@@ -796,6 +850,7 @@
       opener.closest(".tab-btn").classList.add("active");
       document.querySelector('.panel[data-panel="' + opener.dataset.panel + '"]').classList.add("active");
       if (drawer.classList.contains("collapsed")) drawer.classList.remove("collapsed");
+      scrollPanelToTop();
     });
   });
 
@@ -850,6 +905,10 @@
   bwToggle.addEventListener("change", function () {
     state.bw = bwToggle.checked;
     syncBwUI(); render(); saveSettings();
+    // Scroll back up when turning B&W on, so Threshold (which just became
+    // enabled, right below) isn't stuck out of view if the panel had been
+    // scrolled down for some reason.
+    if (state.bw) scrollPanelToTop();
   });
   // Same state, reached from the tab row instead of inside the B&W panel --
   // kept as a separate listener (both just set state.bw and resync) rather
@@ -858,6 +917,7 @@
   tabToggleBw.addEventListener("change", function () {
     state.bw = tabToggleBw.checked;
     syncBwUI(); render(); saveSettings();
+    if (state.bw) scrollPanelToTop();
   });
   thresholdToggle.addEventListener("change", function () {
     state.thresholdEnabled = thresholdToggle.checked;
@@ -1053,8 +1113,26 @@
     root.setAttribute("data-theme", effectiveIsDark ? "light" : "dark");
   });
 
+  /* ---------------- "remember this setup" toggle persistence ---------------- */
+  // This switch gates everything else (saveSettings/savePhotoBlob both check
+  // it), so its own on/off state has to be restored unconditionally, before
+  // those run -- it can't be saved through the same gated mechanism it
+  // controls, or turning it off could never actually be remembered.
+  (function () {
+    var toggle = document.getElementById("persistToggle");
+    try {
+      var saved = localStorage.getItem(REMEMBER_KEY);
+      if (saved !== null) toggle.checked = saved === "1";
+    } catch (e) { /* ignore blocked storage */ }
+    toggle.addEventListener("change", function () {
+      try { localStorage.setItem(REMEMBER_KEY, toggle.checked ? "1" : "0"); }
+      catch (e) { /* ignore */ }
+    });
+  })();
+
   /* ---------------- init ---------------- */
   loadSettings();
+  loadLastPhoto();
   syncBwUI();
   syncGridUI("grid1");
   syncGridUI("grid2");
